@@ -42,6 +42,16 @@ app.get('/admin', (_req, res) => {
 app.use(Sentry.expressErrorHandler());
 app.use((err, _req, res, _next) => {
   console.error('[blog]', err);
+  // Pool-acquire timeouts are the signature of DB saturation. Tagging them
+  // keeps every one in a single Sentry issue, so the investigator sees one
+  // clear "pool exhausted" story instead of a wall of unique errors.
+  if (/timeout exceeded when trying to connect|Connection terminated/i.test(err?.message ?? '')) {
+    Sentry.captureException(err, {
+      tags: { failure_layer: 'database', cause: 'pool_exhausted' },
+      level: 'error',
+    });
+    return res.status(503).json({ error: 'database unavailable' });
+  }
   res.status(err.status ?? 500).json({ error: err.message ?? 'internal error' });
 });
 

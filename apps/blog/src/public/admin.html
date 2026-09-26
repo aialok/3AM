@@ -3,67 +3,324 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Blog Admin — traffic + incident simulator</title>
+<title>3AM — Incident Simulator</title>
 <style>
-  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
-  .row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1.5rem; }
-  button { padding: 0.5rem 1rem; cursor: pointer; }
-  button.danger { background: #c0392b; color: #fff; border: none; }
-  button.on { outline: 3px solid #c0392b; }
-  pre { background: #f4f4f4; padding: 1rem; overflow: auto; }
-  #active { font-weight: bold; }
+  :root {
+    --bg: #0b0f17;
+    --panel: #131a26;
+    --panel-2: #1b2433;
+    --line: #253044;
+    --text: #e6edf7;
+    --muted: #8494ad;
+    --accent: #4c9aff;
+    --good: #2ecc8f;
+    --warn: #f5a524;
+    --bad: #ff5c5c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px;
+    background: var(--bg); color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px; line-height: 1.5;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+  h1 { font-size: 24px; margin: 0; letter-spacing: -0.02em; }
+  h1 .dot { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .spacer { flex: 1; }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 13px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em;
+  }
+  .led { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .pill.ok .led { background: var(--good); box-shadow: 0 0 9px var(--good); }
+  .pill.bad .led { background: var(--bad); box-shadow: 0 0 9px var(--bad); }
+  .pill.bad { border-color: #4a2530; background: #2a1620; color: #ffb4b4; }
+  .pill.ok { border-color: #1f4034; background: #12241d; color: #9df0cf; }
+
+  /* KPI cards */
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 12px; margin-bottom: 22px; }
+  .kpi { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; position: relative; overflow: hidden; }
+  .kpi .label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+  .kpi .value { font-size: 27px; font-weight: 700; margin-top: 5px; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .kpi .unit { font-size: 14px; color: var(--muted); font-weight: 500; margin-left: 3px; }
+  .kpi.alert { border-color: #4a2530; background: linear-gradient(180deg, #2a1620, var(--panel)); }
+  .kpi.alert .value { color: var(--bad); }
+  .kpi.warn { border-color: #4a3a1c; background: linear-gradient(180deg, #2a2113, var(--panel)); }
+  .kpi.warn .value { color: var(--warn); }
+  .kpi canvas { position: absolute; right: 0; bottom: 0; width: 100%; height: 30px; opacity: 0.5; }
+
+  section { margin-bottom: 26px; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 0 0 11px; font-weight: 700; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(228px, 1fr)); gap: 12px; }
+
+  button.card {
+    text-align: left; width: 100%; cursor: pointer;
+    background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; font-family: inherit;
+    transition: transform .12s ease, border-color .12s ease, background .12s ease;
+  }
+  button.card:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--accent); background: var(--panel-2); }
+  button.card:disabled { opacity: 0.45; cursor: not-allowed; }
+  button.card .name { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  button.card .desc { color: var(--muted); font-size: 12.5px; margin-top: 5px; line-height: 1.45; }
+  button.card .alert-tag {
+    display: inline-block; margin-top: 9px; font-size: 10.5px; font-weight: 700;
+    padding: 3px 8px; border-radius: 5px; letter-spacing: 0.04em;
+    background: #2a2113; color: var(--warn); border: 1px solid #4a3a1c;
+  }
+  button.card.active { border-color: var(--bad); background: linear-gradient(180deg, #2a1620, var(--panel)); }
+  button.card.active .name { color: #ffb4b4; }
+  button.card.active::after {
+    content: "ACTIVE"; float: right; font-size: 10px; font-weight: 800;
+    color: var(--bad); letter-spacing: 0.1em; animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  button.stop {
+    width: 100%; padding: 15px; font-family: inherit; font-size: 15px; font-weight: 700;
+    color: #fff; background: linear-gradient(180deg, #e0484d, #b8323a);
+    border: none; border-radius: 12px; cursor: pointer; letter-spacing: 0.02em;
+  }
+  button.stop:hover:not(:disabled) { filter: brightness(1.1); }
+  button.stop:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  /* event log */
+  .log { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; max-height: 210px; overflow-y: auto; font-size: 12.5px; }
+  .log div { padding: 3px 0; border-bottom: 1px solid rgba(37,48,68,0.5); display: flex; gap: 10px; }
+  .log div:last-child { border-bottom: none; }
+  .log .t { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .log .m.warn { color: var(--warn); }
+  .log .m.bad { color: var(--bad); }
+  .log .m.good { color: var(--good); }
+  .log .empty { color: var(--muted); justify-content: center; border: none; }
+
+  .links { display: flex; gap: 10px; flex-wrap: wrap; }
+  .links a {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 15px; border-radius: 9px; text-decoration: none;
+    background: var(--panel); border: 1px solid var(--line);
+    color: var(--text); font-size: 13px; font-weight: 600;
+  }
+  .links a:hover { border-color: var(--accent); background: var(--panel-2); }
+
+  footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--line); }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
 </style>
 </head>
 <body>
-<h1>Blog Admin</h1>
-<p>Prod-traffic + incident simulator for the 3AM hackathon demo.</p>
-<p>Active: <span id="active">none</span></p>
+<div class="wrap">
 
-<h2>Traffic</h2>
-<div class="row">
-  <button data-chaos="traffic-spike">Start Spike</button>
+  <header>
+    <div>
+      <h1><span class="dot">3AM</span> Incident Simulator</h1>
+      <div class="sub">Simulated production app — break it on purpose, 3AM catches it</div>
+    </div>
+    <div class="spacer"></div>
+    <div class="pill" id="health"><span class="led"></span><span id="healthText">connecting…</span></div>
+  </header>
+
+  <div class="kpis" id="kpis"></div>
+
+  <section>
+    <h2>Traffic</h2>
+    <div class="grid">
+      <button class="card" data-chaos="traffic-spike">
+        <div class="name">Start Traffic Spike</div>
+        <div class="desc">Background load generator hammering the blog at ~10 req/sec so dashboards have a live baseline.</div>
+        <div class="alert-tag">TrafficSpike</div>
+      </button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Incidents — click to break something</h2>
+    <div class="grid" id="scenarios"></div>
+  </section>
+
+  <section>
+    <button class="stop" id="stop">STOP ALL — recover the service</button>
+  </section>
+
+  <section>
+    <h2>Event log</h2>
+    <div class="log" id="log"><div class="empty">No events yet — trigger a scenario above.</div></div>
+  </section>
+
+  <section>
+    <h2>Observability</h2>
+    <div class="links">
+      <a href="https://fearlessavocado2394.grafana.net/d/blog-overview/blog-overview" target="_blank" rel="noopener">📊 Grafana — Blog Overview</a>
+      <a href="https://fearlessavocado2394.grafana.net" target="_blank" rel="noopener">☁️ Grafana Cloud</a>
+      <a href="https://sentry.io" target="_blank" rel="noopener">🐛 Sentry — Issues</a>
+      <a href="http://localhost:3000/metrics" target="_blank" rel="noopener">📈 Prometheus /metrics</a>
+      <a href="http://localhost:3001/incidents" target="_blank" rel="noopener">🔍 3AM incidents API</a>
+      <a href="http://localhost:8791" target="_blank" rel="noopener">🤖 TrueForge sessions</a>
+    </div>
+  </section>
+
+  <footer>Every click here is a real HTTP request. Metrics flow to Grafana Cloud via Alloy; errors and traces flow to Sentry.</footer>
 </div>
-
-<h2>Incidents</h2>
-<div class="row">
-  <button data-chaos="db-lock">DB Lock</button>
-  <button data-chaos="latency">Latency</button>
-  <button data-chaos="retry-storm">Retry Storm</button>
-  <button data-chaos="dependency-fail">Dependency Fail</button>
-  <button data-chaos="error-rate">Error Rate</button>
-  <button id="chaos-stop" class="danger">Stop All</button>
-</div>
-
-<h2>Status <small>(live)</small></h2>
-<pre id="status">loading…</pre>
-<p><a href="http://localhost:3002" target="_blank" rel="noopener">Grafana dashboard</a></p>
 
 <script>
-async function post(path) {
-  const r = await fetch(path, { method: 'POST' });
-  document.getElementById('status').textContent = JSON.stringify(await r.json(), null, 2);
+const SCENARIOS = [
+  { id: 'db-lock',          name: 'DB Lock Contention', desc: 'Holds a Postgres advisory lock so every read queues behind it. Pool saturates, p95 climbs.', alert: 'DbPoolExhausted' },
+  { id: 'latency',          name: 'Latency Spike',      desc: 'Injects 0.8–2s delays into every read. Watch the p95 panel jump in Grafana.',      alert: 'HighLatency' },
+  { id: 'error-rate',       name: 'Error Rate',         desc: 'Fails ~30% of reads with a 500. Lights up Sentry with stack traces.',              alert: 'HighErrorRate' },
+  { id: 'dependency-fail',  name: 'Dependency Failure', desc: 'Downstream service returns 502 on every write. Isolates failures to POST /posts.',    alert: 'HighErrorRate' },
+  { id: 'retry-storm',      name: 'Retry Storm',        desc: 'A downstream retry loop failing every 2s. Noise in Sentry that must be separated from signal.', alert: 'HighErrorRate' },
+];
+
+const KPI_DEFS = [
+  { key: 'req_rate',       label: 'Traffic',     fmt: (v) => v.toLocaleString(),  unit: ' req/2s' },
+  { key: 'error_ratio',    label: 'Error rate',  fmt: (v) => (v * 100).toFixed(1), unit: '%', alert: (v) => v > 0.05, warn: (v) => v > 0.01 },
+  { key: 'p95_seconds',    label: 'p95 latency', fmt: (v) => (v * 1000).toFixed(0),  unit: 'ms', alert: (v) => v > 0.8,  warn: (v) => v > 0.4 },
+  { key: 'p50_seconds',    label: 'p50 latency', fmt: (v) => (v * 1000).toFixed(0),  unit: 'ms', alert: (v) => v > 0.8,  warn: (v) => v > 0.4 },
+  { key: 'db_pool_idle',   label: 'Pool idle',   fmt: (v) => v.toLocaleString(), alert: (v) => v === 0 },
+  { key: 'db_pool_waiting',label: 'Pool waiting',fmt: (v) => v.toLocaleString(), alert: (v) => v > 0 },
+];
+
+const history = {};
+const logLines = [];
+let prev = null; // previous poll, for per-interval rates
+
+function log(msg, level = '') {
+  const t = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  logLines.push({ t, msg, level });
+  if (logLines.length > 60) logLines.shift();
+  renderLog();
+}
+
+function renderLog() {
+  const el = document.getElementById('log');
+  if (!logLines.length) { el.innerHTML = '<div class="empty">No events yet — trigger a scenario above.</div>'; return; }
+  el.innerHTML = logLines
+    .slice()
+    .reverse()
+    .map((l) => `<div><span class="t">${l.t}</span><span class="m ${l.level}">${l.msg}</span></div>`)
+    .join('');
+}
+
+function buildScenarios() {
+  document.getElementById('scenarios').innerHTML = SCENARIOS.map(
+    (s) => `<button class="card" data-chaos="${s.id}">
+      <div class="name">${s.name}</div>
+      <div class="desc">${s.desc}</div>
+      <div class="alert-tag">${s.alert}</div>
+    </button>`
+  ).join('');
+}
+
+function buildKpis() {
+  document.getElementById('kpis').innerHTML = KPI_DEFS.map(
+    (d) => `<div class="kpi" id="kpi-${d.key}">
+      <div class="label">${d.label}</div>
+      <div class="value"><span id="v-${d.key}">–</span>${d.unit ? `<span class="unit">${d.unit}</span>` : ''}</div>
+      <canvas id="c-${d.key}" width="200" height="30"></canvas>
+    </div>`
+  ).join('');
+}
+
+function sparkline(key, value) {
+  const c = document.getElementById(`c-${key}`);
+  if (!c) return;
+  const ctx = c.getContext('2d');
+  const data = (history[key] ||= []);
+  data.push(value);
+  if (data.length > 60) data.shift();
+
+  const w = c.width, h = c.height;
+  ctx.clearRect(0, 0, w, h);
+  const max = Math.max(...data, 0.0001);
+  ctx.beginPath();
+  data.forEach((v, i) => {
+    const x = (i / Math.max(data.length - 1, 1)) * w;
+    const y = h - (v / max) * (h - 2) - 1;
+    i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
+  });
+  ctx.strokeStyle = '#4c9aff';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath();
+  ctx.fillStyle = 'rgba(76,154,255,0.14)';
+  ctx.fill();
+}
+
+function renderKpis(k) {
+  for (const d of KPI_DEFS) {
+    const v = k[d.key] ?? 0;
+    const el = document.getElementById(`kpi-${d.key}`);
+    document.getElementById(`v-${d.key}`).textContent = d.fmt(v);
+    el.classList.toggle('alert', !!(d.alert && d.alert(v)));
+    el.classList.toggle('warn', !!(d.warn && d.warn(v)));
+    sparkline(d.key, v);
+  }
+}
+
+async function post(path, label) {
+  try {
+    const r = await fetch(path, { method: 'POST' });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    log(label, 'good');
+  } catch (e) {
+    log(`${label} — failed: ${e.message}`, 'bad');
+  }
   refresh();
 }
-document.querySelectorAll('[data-chaos]').forEach((b) =>
-  b.addEventListener('click', () => post('/chaos/' + b.dataset.chaos))
-);
-document.getElementById('chaos-stop').addEventListener('click', () => post('/chaos/stop'));
+
+// Counters are cumulative, so a raw error_ratio never returns to zero after
+// an incident. Derive a per-interval rate from consecutive polls instead —
+// this makes the cards behave like Grafana's rate() panels, so the numbers
+// agree when you switch between the admin page and the dashboard on stage.
+function withRates(k) {
+  if (!prev) { prev = k; return { ...k, error_ratio: 0, req_rate: 0 }; }
+  const dReq = Math.max(0, k.requests_total - prev.requests_total);
+  const dErr = Math.max(0, k.errors_total - prev.errors_total);
+  const out = { ...k, error_ratio: dReq ? dErr / dReq : 0, req_rate: dReq };
+  prev = k;
+  return out;
+}
 
 async function refresh() {
   try {
     const r = await fetch('/admin/status');
     const data = await r.json();
-    document.getElementById('active').textContent = data.chaos.active.join(', ') || 'none';
+    document.getElementById('health').className = 'pill ok';
+    document.getElementById('healthText').textContent = 'Service healthy';
+    renderKpis(withRates(data.kpis));
     document.querySelectorAll('[data-chaos]').forEach((b) =>
-      b.classList.toggle('on', data.chaos.active.includes(b.dataset.chaos))
+      b.classList.toggle('active', data.chaos.active.includes(b.dataset.chaos))
     );
-    document.getElementById('status').textContent = JSON.stringify(data, null, 2);
-  } catch (e) {
-    document.getElementById('status').textContent = 'unreachable: ' + e;
+    document.getElementById('stop').disabled = data.chaos.active.length === 0;
+  } catch {
+    document.getElementById('health').className = 'pill bad';
+    document.getElementById('healthText').textContent = 'Unreachable';
+    prev = null;
   }
 }
-setInterval(refresh, 2000);
+
+buildScenarios();
+buildKpis();
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-chaos]');
+  if (!b) return;
+  const s = SCENARIOS.find((x) => x.id === b.dataset.chaos);
+  post(`/chaos/${b.dataset.chaos}`, `Started ${s.name} → expect ${s.alert}`);
+});
+document.getElementById('stop').addEventListener('click', () =>
+  post('/chaos/stop', 'Stopped all chaos — service recovering')
+);
+
 refresh();
+setInterval(refresh, 2000);
 </script>
 </body>
 </html>

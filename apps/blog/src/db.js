@@ -13,7 +13,19 @@ function sslFor(url) {
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: sslFor(process.env.DATABASE_URL ?? ''),
+  // Headroom above the default 10: during the db-lock scenario every read
+  // parks on the advisory lock, and a starved pool takes down the whole app
+  // (including /chaos/stop). Extra capacity keeps the control plane alive.
+  max: Number(process.env.PG_POOL_MAX ?? 20),
+  // Gives up on acquiring a connection rather than queueing forever. This is
+  // what turns pool starvation into a real 500 in Sentry instead of a silent
+  // hang — the evidence the investigator needs to call it a DB incident.
+  connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS ?? 2500),
 });
+
+// A dropped Neon/idle connection surfaces here. Without a listener pg emits
+// an unhandled 'error' event and kills the process mid-demo.
+pool.on('error', (err) => console.error('[blog] idle client error:', err.message));
 
 // Self-ensures schema so the app boots against any empty DB
 // (local compose postgres or staging Neon). init.sql covers fresh

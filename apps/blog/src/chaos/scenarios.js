@@ -4,6 +4,10 @@ import { chaosActive, chaosEvents } from '../metrics.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// How long a lock-blocked read waits before Postgres gives up. Short enough
+// that the app stays responsive, long enough for p95 to visibly climb.
+const LOCK_TIMEOUT_MS = Number(process.env.CHAOS_LOCK_TIMEOUT_MS ?? 2000);
+
 // --- lifecycle ---------------------------------------------------------------
 
 function markOn(name) {
@@ -66,6 +70,11 @@ export async function applyReadChaos(pool, queryFn) {
   if (!isOn('db-lock')) return queryFn(pool);
   const client = await pool.connect();
   try {
+    // lock_timeout turns the pileup into fast, visible failures instead of an
+    // unbounded hang. The aborted query surfaces in Sentry as a lock-timeout
+    // error — which is exactly the evidence the investigator correlates
+    // against db_pool_waiting in Grafana.
+    await client.query(`SET LOCAL lock_timeout = '${LOCK_TIMEOUT_MS}ms'`);
     await client.query('BEGIN');
     await client.query('SELECT pg_advisory_xact_lock(42)'); // blocks behind holder
     const out = await queryFn(client);
@@ -73,6 +82,12 @@ export async function applyReadChaos(pool, queryFn) {
     return out;
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
+    if (err?.code === '55P03') {
+      chaosEvents.labels('db-lock').inc();
+      const timeout = new Error(`chaos: lock wait timeout after ${LOCK_TIMEOUT_MS}ms`);
+      Sentry.captureException(timeout, { tags: { scenario: 'db-lock' } });
+      throw Object.assign(timeout, { status: 503 });
+    }
     throw err;
   } finally {
     client.release();

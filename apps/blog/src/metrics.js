@@ -88,8 +88,10 @@ export async function snapshot() {
   const valuesOf = (name) => metrics.find((m) => m.name === name)?.values ?? [];
   return {
     http_requests_total: valuesOf('http_requests_total'),
-    http_request_duration_seconds_count: valuesOf('http_request_duration_seconds').filter(
-      (v) => v.metricName === 'http_request_duration_seconds_count'
+    // Histogram rows are one entry per (le, method, route, status) — the
+    // admin panel needs the buckets to compute p50/p95 client-side.
+    http_request_duration_seconds_bucket: valuesOf('http_request_duration_seconds').filter(
+      (v) => v.metricName === 'http_request_duration_seconds_bucket'
     ),
     db_pool_total: valuesOf('db_pool_total'),
     db_pool_idle: valuesOf('db_pool_idle'),

@@ -16,34 +16,31 @@ app.get('/healthz', (_req, res) => {
 
 // Grafana contact point → POSTs here. 202 immediately; investigation runs async.
 app.post('/webhook/grafana', express.json(), (req, res, next) => {
-  try {
-    const alerts = req.body?.alerts ?? [];
-    const results = alerts.map((a) => handleAlert(a));
-    res.status(202).json({ ok: true, results });
-  } catch (err) {
-    next(err);
-  }
+  Promise.all((req.body?.alerts ?? []).map((a) => handleAlert(a)))
+    .then((results) => res.status(202).json({ ok: true, results }))
+    .catch(next);
 });
 
 // Manual fallback for stage demo if alerts misfire:
 // POST /trigger { "alertname": "HighErrorRate", "service": "blog" }
 app.post('/trigger', express.json(), (req, res, next) => {
-  try {
-    const { alertname = 'ManualTrigger', service = 'blog' } = req.body ?? {};
-    res.status(202).json({ ok: true, ...handleAlert({ alertname, service, status: 'firing' }) });
-  } catch (err) {
-    next(err);
-  }
+  const { alertname = 'ManualTrigger', service = 'blog' } = req.body ?? {};
+  handleAlert({ alertname, service, status: 'firing' })
+    .then((result) => res.status(202).json({ ok: true, ...result }))
+    .catch(next);
 });
 
-app.get('/incidents', (_req, res) => {
-  res.json(listIncidents());
+app.get('/incidents', (_req, res, next) => {
+  listIncidents().then((rows) => res.json(rows)).catch(next);
 });
 
-app.get('/incidents/:id', (req, res) => {
-  const incident = getIncident(req.params.id);
-  if (!incident) return res.status(404).json({ error: 'not found' });
-  res.json(incident);
+app.get('/incidents/:id', (req, res, next) => {
+  getIncident(req.params.id)
+    .then((incident) => {
+      if (!incident) return res.status(404).json({ error: 'not found' });
+      res.json(incident);
+    })
+    .catch(next);
 });
 
 app.use((err, _req, res, _next) => {
@@ -51,8 +48,8 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: err.message ?? 'internal error' });
 });
 
-function handleAlert(alert) {
-  const { incident, created } = ingestAlert(
+async function handleAlert(alert) {
+  const { incident, created } = await ingestAlert(
     {
       alertname: alert.labels?.alertname ?? alert.alertname ?? 'unknown',
       service: alert.labels?.service ?? alert.service ?? 'blog',

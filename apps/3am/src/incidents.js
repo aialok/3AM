@@ -1,6 +1,4 @@
-import { incidentsPool } from './incidents-db.js';
-
-let seq = 0;
+import { incidentsPool, nextIncidentId } from './incidents-db.js';
 
 function dedupeKey(alertname, service) {
   return `${alertname}‖${service}`;
@@ -46,8 +44,7 @@ export async function ingestAlert({ alertname, service, status, startsAt, labels
     }
   }
 
-  seq += 1;
-  const id = `INC-${String(seq).padStart(4, '0')}`;
+  const id = await nextIncidentId();
   const createdAt = new Date(now).toISOString();
   const timeline = [{ at: createdAt, event: `Alert ${alertname} firing on ${service}` }];
 
