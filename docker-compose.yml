@@ -1,6 +1,7 @@
-# 3AM local demo topology.
+# 3AM demo topology: app runs locally, observability/notifications on cloud.
 # All secrets/URLs come from environment (.env). Nothing hardcoded.
 # TrueForge server runs separately via `npx @truefoundry/trueforge` (port 8790).
+# Local Prometheus/Grafana are kept as a fallback behind --profile local-obs.
 
 services:
   postgres:
@@ -28,6 +29,7 @@ services:
       - postgres
 
   prometheus:
+    profiles: ["local-obs"]
     image: prom/prometheus:v3.1.0
     volumes:
       - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
@@ -38,6 +40,7 @@ services:
       - blog
 
   grafana:
+    profiles: ["local-obs"]
     image: grafana/grafana:11.5.2
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
@@ -50,6 +53,18 @@ services:
       - "3002:3000"
     depends_on:
       - prometheus
+
+  alloy:
+    image: grafana/alloy:v1.7.4
+    command: ["run", "/etc/alloy/config.alloy"]
+    environment:
+      GCLOUD_HOSTED_METRICS_URL: ${GCLOUD_HOSTED_METRICS_URL}
+      GCLOUD_HOSTED_METRICS_ID: ${GCLOUD_HOSTED_METRICS_ID}
+      GCLOUD_RW_API_KEY: ${GCLOUD_RW_API_KEY}
+    volumes:
+      - ./infra/alloy/config.alloy:/etc/alloy/config.alloy:ro
+    depends_on:
+      - blog
 
   3am:
     build: ./apps/3am
@@ -66,7 +81,7 @@ services:
       - "${THREE_AM_PORT:-3001}:${THREE_AM_PORT:-3001}"
     depends_on:
       - blog
-      - grafana
+      - alloy
 
 volumes:
   pgdata:

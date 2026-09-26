@@ -1,0 +1,19 @@
+// Scrapes the blog's /metrics and remote_writes to Grafana Cloud.
+// Credentials come from env (GCLOUD_*), never hardcoded.
+// NOTE: Alloy endpoint targets assume default BLOG_PORT=3000.
+prometheus.scrape "blog" {
+  targets = [{ "__address__" = "blog:3000" }]
+
+  forward_to = [prometheus.remote_write.cloud.receiver]
+}
+
+prometheus.remote_write "cloud" {
+  endpoint {
+    url = env("GCLOUD_HOSTED_METRICS_URL")
+
+    basic_auth {
+      username = env("GCLOUD_HOSTED_METRICS_ID")
+      password = env("GCLOUD_RW_API_KEY")
+    }
+  }
+}

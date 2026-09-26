@@ -152,7 +152,7 @@ groups:
           severity: warn
           service: blog
         annotations:
-          summary: 'Blog traffic above 20 RPS'
+          summary: 'Blog traffic above 5 RPS'
         data:
           - refId: A
             relativeTimeRange: { from: 600, to: 0 }
@@ -181,7 +181,7 @@ groups:
               type: threshold
               expression: B
               conditions:
-                - evaluator: { params: [20], type: gt }
+                - evaluator: { params: [5], type: gt }
                   operator: { type: and }
                   query: { params: [C] }
                   reducer: { params: [], type: last }
