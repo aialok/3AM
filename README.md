@@ -4,6 +4,34 @@
 
 3AM is an autonomous incident-response agent that automatically investigates production incidents before engineers start debugging. Built on [TrueForge](https://trueforge.dev) (open-source agent harness), it correlates metrics from **Grafana** and errors from **Sentry** to generate a Root Cause Analysis (RCA) — then posts it to **Slack** and **Notion**.
 
+## Why This Exists: A 3 AM Page at Fampay
+
+This project started from a real shift, not a thought exercise.
+
+I'm on production on-call at Fampay. The pattern is familiar to anyone carrying a pager. An alert fires at 3 AM, and the next 30 to 45 minutes follow the same script every time: open Sentry, read the error, pull the stack trace, open Grafana, check whether latency moved, check whether the database pool saturated, check whether traffic shifted, cross-reference timestamps, rule out the two things that *aren't* wrong, and finally land on a root cause. Then write it up so the next person doesn't repeat it.
+
+That work is mechanical, repetitive, and happens at the worst possible hour. It's also the part of on-call that nobody has automated, because automating it isn't a matter of adding another dashboard.
+
+**Alerting tells you that something broke. Nothing tells you what, why, or what to do about it** — because that answer requires reading infrastructure metrics and application errors side by side and reasoning across them, and no single system holds both halves.
+
+3AM is what I'd want to receive at 3 AM instead of a raw alert: a written root-cause analysis, with cited evidence, a confidence score, and a recommended next action, already waiting.
+
+**The premise:** an incident is a correlation problem, and correlation is what language models are genuinely good at. The metrics platform knows p99 latency went from 120 ms to 4.9 s and that the connection pool saturated, but not that a specific migration took a table lock. The error tracker knows a deadlock exception appeared at one line and one timestamp, but not whether it accounts for the customer impact. The answer only exists where the two overlap — and finding that overlap by hand at 3 AM is slow, repetitive, and exactly the kind of judgment work that shouldn't require a senior engineer.
+
+## How It Behaves in Production
+
+**It runs unattended.** The agent has read-only tool access to metrics and errors. It cannot restart services, scale anything, or change configuration. A system that can remediate during an investigation can also remediate *incorrectly* during a bad inference, at the worst possible time. So its worst failure mode is a wrong paragraph in a postmortem, not an outage.
+
+**It reports uncertainty instead of manufacturing confidence.** Confidence is a number derived from cross-system agreement. It drops when evidence is thin, when the two systems disagree, or when one has no data for the window. When the data cannot support a conclusion, 3AM says so and says what it would check next. A confidently wrong root cause is worse than no answer, because it sends a whole team down the wrong path for hours.
+
+**It separates observation from inference.** Facts land in *evidence*, each attributed to its source with concrete values. Interpretation lands in *hypotheses*, explicitly marked unconfirmed. Every tool call is retained and inspectable, so the reasoning is auditable rather than something you have to take on faith.
+
+**It absorbs alert noise.** Deduplication folds repeated firings for the same service and alert type into one incident, so a flapping alert produces one investigation rather than a swarm of them.
+
+**It gets better over time.** This is the long game. Every investigation leaves behind a structured record: the alert, the queries run, the evidence found, the hypothesis, the confidence, and how it compared to the actual outcome engineers reached. Run against a real incident history, that becomes a corpus of *your* system's failure modes. Point it at last quarter's postmortems and the confidence calibration, the query selection, and the root-cause phrasing all improve, because it is no longer reasoning from a generic model of production but from a specific model of *your* production.
+
+That's the difference between an agent that summarizes alerts and one that accumulates institutional knowledge about a codebase while the team sleeps.
+
 ## The Problem
 
 ```
@@ -19,6 +47,12 @@ Manual correlation → Hypothesize → Test → Fix
 ```
 
 **3AM automates the investigation** — you wake up to a complete RCA with evidence.
+
+## Why an Agent, Not a Runbook
+
+The investigation is genuinely open-ended. The agent decides which queries to run, notices a failed datasource lookup and retries it, separates real customer-facing failures from control-plane noise in the error stream, and aligns timestamps across two systems to find where they corroborate each other. It adapts as the picture changes.
+
+A fixed runbook would have to know in advance which queries to run, in what order, and how to interpret every result — and would have no idea what to do when a query fails, an unfamiliar error type appears, or the evidence genuinely does not support a conclusion. That last case is precisely where deterministic automation is worst and an agent is most useful.
 
 ## How It Works: The Complete Flow
 
