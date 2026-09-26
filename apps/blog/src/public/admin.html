@@ -103,6 +103,40 @@
   .log .m.good { color: var(--good); }
   .log .empty { color: var(--muted); justify-content: center; border: none; }
 
+  .hint { color: var(--muted); font-size: 12.5px; margin: -4px 0 12px; max-width: 760px; }
+
+  .rps { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 15px 17px; }
+  .rps label { color: var(--muted); font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; }
+  .rps input[type=range] { flex: 1; min-width: 190px; accent-color: var(--accent); }
+  .rps .val { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
+  .rps .unit { color: var(--muted); font-size: 12px; font-weight: 500; }
+  .rps .quick { display: flex; gap: 6px; }
+  .rps .quick button { padding: 5px 11px; font-size: 12px; font-weight: 600; font-family: inherit; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 7px; cursor: pointer; }
+  .rps .quick button:hover { border-color: var(--accent); }
+
+  button.page {
+    text-align: left; width: 100%; cursor: pointer;
+    background: linear-gradient(180deg, #1e2a3d, var(--panel));
+    color: var(--text); border: 1px solid #2f4463; border-radius: 12px; padding: 13px 15px;
+    font-family: inherit; transition: transform .12s ease, border-color .12s ease;
+  }
+  button.page:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--accent); }
+  button.page:disabled { opacity: 0.5; cursor: wait; }
+  button.page .name { font-weight: 700; font-size: 14.5px; }
+  button.page .desc { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  button.page.resolve { background: linear-gradient(180deg, #1c2b23, var(--panel)); border-color: #2c4a3a; }
+  button.page.resolve .name { color: #9df0cf; }
+
+  .inc { display: flex; gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(37,48,68,0.5); }
+  .inc:last-child { border-bottom: none; }
+  .inc .id { font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .inc .al { color: var(--muted); flex-shrink: 0; }
+  .inc .st { margin-left: auto; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; flex-shrink: 0; }
+  .st.open { background: #2a2113; color: var(--warn); }
+  .st.investigating { background: #12233a; color: var(--accent); }
+  .st.done { background: #12241d; color: var(--good); }
+  .st.error, .st.resolved { background: #2a1620; color: #ffb4b4; }
+
   .links { display: flex; gap: 10px; flex-wrap: wrap; }
   .links a {
     display: inline-flex; align-items: center; gap: 7px;
@@ -132,10 +166,22 @@
 
   <section>
     <h2>Traffic</h2>
-    <div class="grid">
+    <div class="rps">
+      <label>Baseline RPS</label>
+      <input type="range" id="rpsRange" min="0" max="1000" step="10" value="100" />
+      <span class="val"><span id="rpsVal">100</span><span class="unit"> req/s</span></span>
+      <div class="quick">
+        <button data-rps="0">Stop</button>
+        <button data-rps="50">50</button>
+        <button data-rps="100">100</button>
+        <button data-rps="250">250</button>
+        <button data-rps="500">500</button>
+      </div>
+    </div>
+    <div class="grid" style="margin-top:12px">
       <button class="card" data-chaos="traffic-spike">
-        <div class="name">Start Traffic Spike</div>
-        <div class="desc">Background load generator hammering the blog at ~10 req/sec so dashboards have a live baseline.</div>
+        <div class="name">Traffic Spike ×5</div>
+        <div class="desc">Multiplies the baseline load 5× so the spike reads as a real surge against known traffic.</div>
         <div class="alert-tag">TrafficSpike</div>
       </button>
     </div>
@@ -148,6 +194,17 @@
 
   <section>
     <button class="stop" id="stop">STOP ALL — recover the service</button>
+  </section>
+
+  <section>
+    <h2>Page 3AM — fire a Grafana alert</h2>
+    <p class="hint">Sends a real Grafana webhook payload to 3AM's contact point. This is the same path a live alert takes, so 3AM dedupes, opens a TrueForge session, investigates Grafana + Sentry, and writes the RCA.</p>
+    <div class="grid" id="alerts"></div>
+  </section>
+
+  <section>
+    <h2>Incidents</h2>
+    <div class="log" id="incidents"><div class="empty">No incidents yet — fire an alert above.</div></div>
   </section>
 
   <section>
@@ -188,9 +245,18 @@ const KPI_DEFS = [
   { key: 'db_pool_waiting',label: 'Pool waiting',fmt: (v) => v.toLocaleString(), alert: (v) => v > 0 },
 ];
 
+// Mirrors ALERTS in routes/admin.js and the Grafana alert rules.
+const ALERTS = [
+  { id: 'HighErrorRate',    desc: '5xx share above 5%' },
+  { id: 'HighLatency',      desc: 'p95 above 800ms' },
+  { id: 'DbPoolExhausted',  desc: 'requests waiting on a connection' },
+  { id: 'TrafficSpike',     desc: 'traffic above 5 RPS' },
+];
+
 const history = {};
 const logLines = [];
 let prev = null; // previous poll, for per-interval rates
+let lastAlertName = null; // so "Resolve" knows which alert to clear
 
 function log(msg, level = '') {
   const t = new Date().toLocaleTimeString('en-GB', { hour12: false });
@@ -217,6 +283,68 @@ function buildScenarios() {
       <div class="alert-tag">${s.alert}</div>
     </button>`
   ).join('');
+}
+
+function buildAlerts() {
+  document.getElementById('alerts').innerHTML =
+    ALERTS.map(
+      (a) => `<button class="page" data-alert="${a.id}">
+        <div class="name">📣 ${a.id}</div>
+        <div class="desc">${a.desc}</div>
+      </button>`
+    ).join('') +
+    `<button class="page resolve" id="resolve">
+       <div class="name">✓ Resolve open incident</div>
+       <div class="desc">sends status=resolved, exactly as Grafana does when the alert clears</div>
+     </button>`;
+}
+
+function renderIncidents(rows) {
+  const el = document.getElementById('incidents');
+  if (!rows.length) { el.innerHTML = '<div class="empty">No incidents yet — fire an alert above.</div>'; return; }
+  el.innerHTML = rows
+    .slice(0, 8)
+    .map(
+      (i) => `<div class="inc">
+        <span class="id">${i.id}</span>
+        <span class="al">${i.alertname}</span>
+        <span class="al">· ${(i.alert_count ?? 1)} alert(s)</span>
+        <span class="st ${i.status}">${i.status}</span>
+      </div>`
+    )
+    .join('');
+}
+
+async function fireAlert(alertname, status = 'firing') {
+  if (status === 'firing') lastAlertName = alertname;
+  if (!alertname) { log('✗ nothing to resolve yet — fire an alert first', 'warn'); return; }
+  log(`→ 3AM: ${alertname} ${status}`, status === 'firing' ? 'warn' : 'good');
+  try {
+    const r = await fetch('/admin/alert', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alertname, status }),
+    });
+    const d = await r.json();
+    if (!r.ok) { log(`✗ 3AM rejected: ${d.error ?? r.status}`, 'bad'); return; }
+    const res0 = d.threeAm?.results?.[0];
+    if (res0?.created) log(`✓ ${res0.incidentId} created — investigation started`, 'good');
+    else if (res0?.incidentId) log(`→ ${res0.incidentId} deduped (already investigating)`, 'warn');
+    else log('→ no open incident to resolve', 'warn');
+  } catch (e) {
+    log(`✗ could not reach 3AM: ${e.message}`, 'bad');
+  }
+  refreshIncidents();
+}
+
+async function refreshIncidents() {
+  try {
+    const r = await fetch('/admin/incidents');
+    renderIncidents(await r.json());
+  } catch {
+    document.getElementById('incidents').innerHTML =
+      '<div class="empty">3AM unreachable</div>';
+  }
 }
 
 function buildKpis() {
@@ -289,6 +417,34 @@ function withRates(k) {
   return out;
 }
 
+// Traffic is owned by the server, so the slider reflects /chaos state
+// instead of being a local guess that can drift.
+let rpsPending = false;
+function syncRps(t) {
+  if (!t || rpsPending) return;
+  document.getElementById('rpsVal').textContent = t.rps;
+  document.getElementById('rpsRange').value = t.rps;
+}
+
+async function setRps(rps, label) {
+  rpsPending = true;
+  document.getElementById('rpsVal').textContent = rps;
+  try {
+    const r = await fetch('/chaos/traffic', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rps }),
+    });
+    const d = await r.json();
+    log(label ?? `Traffic → ${rps} RPS`, 'good');
+    syncRps(d.traffic);
+  } catch (e) {
+    log(`✗ traffic change failed: ${e.message}`, 'bad');
+  }
+  rpsPending = false;
+  refresh();
+}
+
 async function refresh() {
   try {
     const r = await fetch('/admin/status');
@@ -300,6 +456,7 @@ async function refresh() {
       b.classList.toggle('active', data.chaos.active.includes(b.dataset.chaos))
     );
     document.getElementById('stop').disabled = data.chaos.active.length === 0;
+    syncRps(data.traffic);
   } catch {
     document.getElementById('health').className = 'pill bad';
     document.getElementById('healthText').textContent = 'Unreachable';
@@ -309,18 +466,36 @@ async function refresh() {
 
 buildScenarios();
 buildKpis();
+buildAlerts();
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-chaos]');
-  if (!b) return;
-  const s = SCENARIOS.find((x) => x.id === b.dataset.chaos);
-  post(`/chaos/${b.dataset.chaos}`, `Started ${s.name} → expect ${s.alert}`);
+  if (b) {
+    const s = SCENARIOS.find((x) => x.id === b.dataset.chaos);
+    post(`/chaos/${b.dataset.chaos}`, `Started ${s.name} → expect ${s.alert}`);
+    return;
+  }
+  const q = e.target.closest('[data-rps]');
+  if (q) { setRps(Number(q.dataset.rps)); return; }
+  const a = e.target.closest('[data-alert]');
+  if (a) { fireAlert(a.dataset.alert, 'firing'); return; }
+  if (e.target.closest('#resolve')) { fireAlert(lastAlertName, 'resolved'); }
+});
+
+// Release-based so dragging feels live; the network call is debounced.
+let rpsTimer = null;
+document.getElementById('rpsRange').addEventListener('input', (e) => {
+  document.getElementById('rpsVal').textContent = e.target.value;
+  clearTimeout(rpsTimer);
+  rpsTimer = setTimeout(() => setRps(Number(e.target.value)), 250);
 });
 document.getElementById('stop').addEventListener('click', () =>
   post('/chaos/stop', 'Stopped all chaos — service recovering')
 );
 
 refresh();
+refreshIncidents();
 setInterval(refresh, 2000);
+setInterval(refreshIncidents, 5000);
 </script>
 </body>
 </html>

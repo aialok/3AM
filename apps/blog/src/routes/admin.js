@@ -1,8 +1,23 @@
 import { Router } from 'express';
 import { snapshot } from '../metrics.js';
 import { listActive } from '../chaos/state.js';
+import { getState as getTrafficState } from '../chaos/traffic.js';
 
 export const adminRouter = Router();
+
+// Where 3AM listens. Same compose network, so the service name resolves.
+const THREE_AM_URL = process.env.THREE_AM_BASE_URL ?? 'http://3am:3001';
+
+// Mirrors infra/grafana/provisioning/alerting/blog-rules.yml. The admin page
+// fires these so the demo works before the cloud alert rules exist — and it
+// posts the real Grafana webhook shape, so the same 3AM code path runs either
+// way (the only difference is who sent the HTTP request).
+const ALERTS = {
+  HighErrorRate: { severity: 'page', summary: 'Blog 5xx rate above 5%' },
+  HighLatency: { severity: 'page', summary: 'Blog p95 latency above 0.8s' },
+  DbPoolExhausted: { severity: 'page', summary: 'Requests waiting for a Postgres connection' },
+  TrafficSpike: { severity: 'warn', summary: 'Blog traffic above 5 RPS' },
+};
 
 // Derives the headline numbers from the raw counters so the admin UI can
 // render cards without reimplementing PromQL. Rates are computed over a short
@@ -64,8 +79,58 @@ adminRouter.get('/status', async (_req, res, next) => {
       ok: true,
       kpis: derive(metrics),
       chaos: { active: listActive() },
+      traffic: getTrafficState(),
       chaosEvents: metrics.chaos_events_total ?? [],
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Fire a Grafana-shaped alert at 3AM's contact point. `firing` starts an
+// investigation; `resolved` closes the open incident once chaos is stopped.
+adminRouter.post('/alert', async (req, res, next) => {
+  try {
+    const { alertname, status = 'firing' } = req.body ?? {};
+    const meta = ALERTS[alertname];
+    if (!meta) {
+      return res.status(400).json({ error: `unknown alertname. expected one of: ${Object.keys(ALERTS).join(', ')}` });
+    }
+    const now = new Date().toISOString();
+    const payload = {
+      receiver: '3am-webhook',
+      status,
+      orgId: 1,
+      externalURL: process.env.GRAFANA_CLOUD_STACK ?? '',
+      alerts: [
+        {
+          status,
+          labels: { alertname, service: 'blog', severity: meta.severity },
+          annotations: { summary: meta.summary },
+          startsAt: now,
+          endsAt: status === 'resolved' ? now : '0001-01-01T00:00:00Z',
+          generatorURL: '',
+          fingerprint: `${alertname}-blog-manual`,
+        },
+      ],
+    };
+    const r = await fetch(`${THREE_AM_URL}/webhook/grafana`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await r.json();
+    res.status(r.status).json({ ok: r.ok, sent: alertname, status, threeAm: body });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Thin proxy to 3AM so the page can show incident state without CORS games.
+adminRouter.get('/incidents', async (_req, res, next) => {
+  try {
+    const r = await fetch(`${THREE_AM_URL}/incidents`);
+    res.status(r.status).json(await r.json());
   } catch (err) {
     next(err);
   }

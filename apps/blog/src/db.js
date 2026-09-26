@@ -13,10 +13,10 @@ function sslFor(url) {
 export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: sslFor(process.env.DATABASE_URL ?? ''),
-  // Headroom above the default 10: during the db-lock scenario every read
-  // parks on the advisory lock, and a starved pool takes down the whole app
-  // (including /chaos/stop). Extra capacity keeps the control plane alive.
-  max: Number(process.env.PG_POOL_MAX ?? 20),
+  // Sized for the synthetic load: at ~100-500 RPS with a mix of cached-ish and
+  // DB-backed reads, 20 connections saturate against a network Postgres and
+  // every request starts queueing (which looks like an incident that isn't one).
+  max: Number(process.env.PG_POOL_MAX ?? 40),
   // Gives up on acquiring a connection rather than queueing forever. This is
   // what turns pool starvation into a real 500 in Sentry instead of a silent
   // hang — the evidence the investigator needs to call it a DB incident.

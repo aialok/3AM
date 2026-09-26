@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/node';
 import { chaos, isOn, listActive, SCENARIOS } from './state.js';
 import { chaosActive, chaosEvents } from '../metrics.js';
+import * as traffic from './traffic.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -46,6 +47,11 @@ export async function stopAll() {
     }
     markOff(name);
     stopped.push(name);
+  }
+  // Put the load generator back to the standing baseline after a spike.
+  if (chaos.restoreTraffic) {
+    chaos.restoreTraffic();
+    chaos.restoreTraffic = null;
   }
   return { stopped };
 }
@@ -134,14 +140,13 @@ const STARTERS = {
   // Flag-driven; the actual sleep happens in applyReadChaos.
   async latency() {},
 
-  // Background self-load: hammers GET /posts every 100ms.
-  // Shows up as a traffic spike in Grafana (no new metrics needed).
+  // Multiplies the standing baseline load instead of running a weak second
+  // loop, so the spike reads as a real surge off a known baseline.
   async 'traffic-spike'() {
-    const port = process.env.BLOG_PORT ?? 3000;
-    const timer = setInterval(() => {
-      fetch(`http://localhost:${port}/posts`).catch(() => {});
-    }, 100);
-    chaos.timers.set('traffic-spike', timer);
+    const multiplier = Number(process.env.CHAOS_SPIKE_MULTIPLIER ?? 5);
+    const base = Number(process.env.BASELINE_RPS ?? 100);
+    traffic.setRps(base * multiplier);
+    chaos.restoreTraffic = () => traffic.setRps(base);
   },
 
   // Background retry loop against a fake downstream that always fails.

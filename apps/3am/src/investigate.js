@@ -26,18 +26,43 @@ export async function investigate(incident) {
   }
 }
 
+// Investigation brief. Only facts 3AM actually knows are stated here — the
+// agent's own instructions already cover tool usage and method, so repeating
+// them in the prompt just wastes context and invites drift.
 function investigationPrompt(incident) {
-  return [
-    `Incident ${incident.id}: Grafana alert "${incident.alertname}" firing on service "${incident.service}".`,
-    `First seen: ${incident.startsAt}. Deduplicated re-alerts: ${incident.alertCount - 1}.`,
-    `Grafana: ${config.grafanaBaseUrl} (dashboard: Blog Overview).`,
-    incident.labels && Object.keys(incident.labels).length
-      ? `Alert labels: ${JSON.stringify(incident.labels)}.`
-      : '',
-    'Investigate with the Grafana and Sentry MCP tools and return the RCA JSON.',
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const started = new Date(incident.startsAt ?? Date.now());
+  const baselineStart = new Date(started.getTime() - config.baselineWindowMs);
+
+  const lines = [
+    `# Incident ${incident.id}`,
+    '',
+    `Alert:      ${incident.alertname}`,
+    `Service:    ${incident.service}`,
+    `Severity:   ${incident.labels?.severity ?? 'unknown'}`,
+    `Fired at:   ${started.toISOString()}`,
+    `Investigate window: ${started.toISOString()} → now`,
+    `Baseline window:   ${baselineStart.toISOString()} → ${started.toISOString()}`,
+    `Re-alerts (deduped into this incident): ${Math.max(0, (incident.alertCount ?? 1) - 1)}`,
+  ];
+
+  if (config.grafana.dashboardUrl) {
+    lines.push(`Grafana dashboard "${config.grafana.dashboardTitle}": ${config.grafana.dashboardUrl}`);
+  }
+  if (config.sentryProject) {
+    lines.push(`Sentry project: ${config.sentryProject}`);
+  }
+
+  const extra = Object.entries(incident.labels ?? {})
+    .filter(([k]) => !['alertname', 'service', 'severity'].includes(k));
+  if (extra.length) {
+    lines.push(`Other alert labels: ${JSON.stringify(Object.fromEntries(extra))}`);
+  }
+
+  lines.push(
+    '',
+    'Correlate Grafana and Sentry over the investigate window against the baseline, then return the RCA JSON.'
+  );
+  return lines.join('\n');
 }
 
 // response_format guarantees JSON, but tolerate fences if a model adds them.

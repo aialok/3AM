@@ -12,6 +12,11 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       BLOG_PORT: ${BLOG_PORT:-3000}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      # Standing synthetic load so the dashboards always have a baseline.
+      BASELINE_RPS: ${BASELINE_RPS:-100}
+      CHAOS_SPIKE_MULTIPLIER: ${CHAOS_SPIKE_MULTIPLIER:-5}
+      # Admin panel fires Grafana-shaped alerts at 3AM (same compose network).
+      THREE_AM_BASE_URL: http://3am:3001
     ports:
       - "${BLOG_PORT:-3000}:${BLOG_PORT:-3000}"
 
@@ -40,7 +45,11 @@ services:
       TRUEFORGE_MODEL: ${TRUEFORGE_MODEL:-}
       THREE_AM_PORT: ${THREE_AM_PORT:-3001}
       THREE_AM_DATABASE_URL: ${THREE_AM_DATABASE_URL}
-      GRAFANA_BASE_URL: ${GRAFANA_BASE_URL:-http://grafana:3000}
+      # Where the agent should send engineers when it cites a dashboard.
+      GRAFANA_CLOUD_STACK: ${GRAFANA_CLOUD_STACK:-}
+      GRAFANA_DASHBOARD_UID: ${GRAFANA_DASHBOARD_UID:-blog-overview}
+      GRAFANA_DASHBOARD_TITLE: ${GRAFANA_DASHBOARD_TITLE:-Blog Overview}
+      SENTRY_PROJECT: ${SENTRY_PROJECT:-}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_CHANNEL_ID: ${SLACK_CHANNEL_ID:-}
       NOTION_TOKEN: ${NOTION_TOKEN:-}

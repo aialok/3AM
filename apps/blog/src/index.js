@@ -8,6 +8,7 @@ import { metricsMiddleware, register } from './metrics.js';
 import { postsRouter } from './routes/posts.js';
 import { adminRouter } from './routes/admin.js';
 import { chaosRouter } from './chaos/router.js';
+import { startOnBoot as startBaselineTraffic, stop as stopBaselineTraffic } from './chaos/traffic.js';
 
 // All config from env (.env local, .env.staging Neon). Nothing hardcoded.
 const PORT = Number(process.env.BLOG_PORT ?? 3000);
@@ -56,6 +57,13 @@ app.use((err, _req, res, _next) => {
 });
 
 await ensureSchema();
-app.listen(PORT, () => console.log(`[blog] listening on :${PORT}`));
+app.listen(PORT, () => {
+  const t = startBaselineTraffic();
+  console.log(`[blog] listening on :${PORT}`);
+  if (t.rps) console.log(`[blog] baseline load: ${t.rps} RPS`);
+});
 
-process.on('SIGTERM', () => pool.end());
+process.on('SIGTERM', () => {
+  stopBaselineTraffic();
+  pool.end();
+});

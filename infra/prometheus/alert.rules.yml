@@ -33,10 +33,10 @@ groups:
           summary: 'Requests waiting for a Postgres connection'
 
       - alert: TrafficSpike
-        expr: sum(rate(http_requests_total[2m])) > 5
+        expr: sum(rate(http_requests_total[2m])) > 250
         for: 1m
         labels:
           severity: warn
           service: blog
         annotations:
-          summary: 'Blog traffic above 5 RPS'
+          summary: 'Blog traffic above 250 RPS (baseline is 100)'
