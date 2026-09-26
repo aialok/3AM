@@ -37,7 +37,36 @@ export async function loadAgentSpec() {
   const agentJson = JSON.parse(await readFile(await findAgentJson(), 'utf8'));
   const spec = structuredClone(agentJson.manifest);
   if (config.trueforge.model) spec.model.name = config.trueforge.model;
+  // Reference only MCP servers actually configured on the server —
+  // unknown names make session creation fail (422). The loop works
+  // tool-less today and gains tools automatically once Grafana/Sentry
+  // connectors are added (Settings → Connectors).
+  spec.mcp_servers = await filterConfiguredServers(spec.mcp_servers ?? []);
   return { name: agentJson.name, spec };
+}
+
+async function filterConfiguredServers(wanted) {
+  try {
+    const res = await fetch(`${config.trueforge.baseUrl}/api/v1/settings/mcp-servers`);
+    const { data } = await res.json();
+    const byName = new Map((data ?? []).map((s) => [s.name, s]));
+    const kept = [];
+    for (const s of wanted) {
+      const found = byName.get(s.name);
+      const status = found?.auth_status?.status;
+      // Usable headlessly: configured + (already authenticated, or
+      // header/no-auth since those carry no interactive step).
+      // auth_required (OAuth pending) would pause the turn forever.
+      const ready =
+        found && (status === 'authenticated' || ['header', 'none'].includes(found.manifest?.auth?.type));
+      if (ready) kept.push(s);
+      else console.log(`[3am] MCP unusable, skipping: ${s.name} (${found ? status : 'not configured'})`);
+    }
+    return kept;
+  } catch (err) {
+    console.log(`[3am] could not list MCP servers, sending spec as-is: ${err.message}`);
+    return wanted;
+  }
 }
 
 // One TrueForge session per incident. Returns the session id.

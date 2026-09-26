@@ -317,8 +317,8 @@ NOTION_DATABASE_ID=
 * [x] **Phase 2 — Infra:** `infra/prometheus.yml` + `alert.rules.yml`, `infra/grafana/` datasource + dashboard + alert contact-point webhook, `infra/postgres/init.sql`, wire into compose
 * [x] **Phase 3 — Chaos + Admin wiring:** `apps/blog/src/chaos/` db-lock + latency + 4 more + `/chaos/stop`, wire admin buttons, verified Grafana + Sentry move + full auto-trigger loop (alerts fire → Grafana webhooks hit 3AM → resolve on stop)
 * [x] **Phase 4 — TrueForge:** `trueforge/agent.json` + `mcp.json` + README; `pnpm add @truefoundry/trueforge-sdk @truefoundry/trueforge-ui`; verified server + session + turn stream (`apps/3am/scripts/verify-agent.mjs` → `done`)
-* [ ] **Phase 5 — 3AM core:** `apps/3am/` `/webhook/grafana` + dedupe + incidents + trueforge client + RCA parse (+ `/trigger` fallback)
-* [ ] **Phase 6 — Notify:** real Slack + Notion posters, RCA markdown template (facts vs hypotheses)
+* [x] **Phase 5 — 3AM core:** `apps/3am/` `/webhook/grafana` + dedupe + incidents + trueforge client + RCA parse (+ `/trigger` fallback) — verified host-direct: trigger → session → turn → RCA `done` (`incidents/INC-0001-report.md`)
+* [x] **Phase 6 — Notify:** real Slack + Notion posters, RCA markdown template (facts vs hypotheses) — verified host-direct: RCA `done` → notify skips cleanly with timeline events when tokens unset
 * [ ] **Phase 7 — Demo script:** end-to-end `chaos → metrics → Grafana alert fires → webhook → RCA → Slack/Notion`, one-command compose up
 
 ## Hackathon Demo Script

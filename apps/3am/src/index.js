@@ -2,9 +2,11 @@ import './env.js';
 import express from 'express';
 import { config, assertConfig } from './config.js';
 import { ingestAlert, getIncident, listIncidents } from './incidents.js';
+import { initIncidentsSchema } from './incidents-db.js';
 import { investigate } from './investigate.js';
 
 assertConfig();
+initIncidentsSchema().catch((err) => { console.error('[3am] DB init failed:', err); process.exit(1); });
 
 const app = express();
 

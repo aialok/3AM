@@ -13,26 +13,46 @@
     "mcp_servers": [
       {
         "name": "grafana",
-        "enable_tools": ["@read-only"],
-        "require_approval_for_tools": ["@destructive"],
+        "enable_tools": [
+          "@read-only"
+        ],
+        "require_approval_for_tools": [
+          "@destructive"
+        ],
         "preload": false
       },
       {
         "name": "sentry",
-        "enable_tools": ["@read-only"],
-        "require_approval_for_tools": ["@destructive"],
+        "enable_tools": [
+          "@read-only"
+        ],
+        "require_approval_for_tools": [
+          "@destructive"
+        ],
         "preload": false
       }
     ],
     "skills": [],
     "config": {
-      "sandbox": { "enabled": false },
-      "generative_ui": { "enabled": true },
-      "ask_user_questions": { "enabled": false },
-      "dynamic_sub_agents": { "enabled": true },
+      "sandbox": {
+        "enabled": false
+      },
+      "generative_ui": {
+        "enabled": true
+      },
+      "ask_user_questions": {
+        "enabled": false
+      },
+      "dynamic_sub_agents": {
+        "enabled": true
+      },
       "context_management": {
-        "compaction": { "enabled": true },
-        "large_tool_response": { "enabled": true }
+        "compaction": {
+          "enabled": true
+        },
+        "large_tool_response": {
+          "enabled": true
+        }
       },
       "iteration_limit": 50
     },
@@ -56,41 +76,76 @@
             "follow_up"
           ],
           "properties": {
-            "summary": { "type": "string" },
-            "started_at": { "type": "string" },
-            "affected_service": { "type": "string" },
-            "customer_impact": { "type": "string" },
+            "summary": {
+              "type": "string"
+            },
+            "started_at": {
+              "type": "string"
+            },
+            "affected_service": {
+              "type": "string"
+            },
+            "customer_impact": {
+              "type": "string"
+            },
             "timeline": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["at", "event"],
+                "required": [
+                  "at",
+                  "event"
+                ],
                 "properties": {
-                  "at": { "type": "string" },
-                  "event": { "type": "string" }
-                }
+                  "at": {
+                    "type": "string"
+                  },
+                  "event": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
               }
             },
-            "root_cause": { "type": "string" },
+            "root_cause": {
+              "type": "string"
+            },
             "evidence": {
               "type": "array",
               "items": {
                 "type": "object",
-                "required": ["source", "fact"],
+                "required": [
+                  "source",
+                  "fact"
+                ],
                 "properties": {
-                  "source": { "type": "string" },
-                  "fact": { "type": "string" }
-                }
+                  "source": {
+                    "type": "string"
+                  },
+                  "fact": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "hypotheses": {
               "type": "array",
-              "items": { "type": "string" }
+              "items": {
+                "type": "string"
+              }
             },
-            "confidence": { "type": "number" },
-            "mitigation_now": { "type": "string" },
-            "follow_up": { "type": "string" }
-          }
+            "confidence": {
+              "type": "number"
+            },
+            "mitigation_now": {
+              "type": "string"
+            },
+            "follow_up": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       }
     }

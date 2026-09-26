@@ -1,30 +1,29 @@
 import { config } from './config.js';
 import { openIncidentSession, runTurnToCompletion } from './trueforge.js';
+import { notifyIncident } from './notify/index.js';
+import { updateIncidentSession, updateIncidentRCA, updateIncidentError, addTimelineEvent } from './incidents.js';
 
 // Builds the investigation prompt, runs the turn, parses the RCA JSON.
-// Mutates the incident (status, rca/error, timeline). Never throws —
-// failures are recorded on the incident for GET /incidents/:id.
+// Persists updates to DB. Never throws — failures recorded on incident.
 export async function investigate(incident) {
-  incident.status = 'investigating';
-  incident.timeline.push({ at: new Date().toISOString(), event: 'Investigation started' });
+  await addTimelineEvent(incident.id, { at: new Date().toISOString(), event: 'Investigation started' });
   try {
     const session = await openIncidentSession(incident);
+    await updateIncidentSession(incident.id, session.id);
     const turn = await runTurnToCompletion(session.id, [
       { type: 'user.message', content: investigationPrompt(incident) },
     ]);
     if (turn.state.status !== 'done' || !turn.state.output) {
       throw new Error(`turn ended: ${turn.state.status} ${turn.state.message ?? ''}`.trim());
     }
-    incident.rca = parseRca(turn.state.output.content);
-    incident.status = 'done';
-    incident.timeline.push({ at: new Date().toISOString(), event: 'RCA ready' });
-    // Phase 6 hook: notify/slack.js + notify/notion.js consume incident.rca here.
+    const rca = parseRca(turn.state.output.content);
+    await updateIncidentRCA(incident.id, rca);
+    await addTimelineEvent(incident.id, { at: new Date().toISOString(), event: 'RCA ready' });
+    await notifyIncident({ ...incident, rca, status: 'done' });
   } catch (err) {
-    incident.error = err.message;
-    incident.status = 'error';
-    incident.timeline.push({ at: new Date().toISOString(), event: `Investigation failed: ${err.message}` });
+    await updateIncidentError(incident.id, err.message);
+    await addTimelineEvent(incident.id, { at: new Date().toISOString(), event: `Investigation failed: ${err.message}` });
   }
-  return incident;
 }
 
 function investigationPrompt(incident) {

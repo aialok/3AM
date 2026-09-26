@@ -1,6 +1,6 @@
 # 3AM demo topology: app runs locally, data + observability + notifications on cloud.
 # All secrets/URLs come from environment (.env). Nothing hardcoded.
-# TrueForge server runs separately via `npx @truefoundry/trueforge` (port 8790).
+# TrueForge runs separately via `npx @truefoundry/trueforge` (see RUN.md).
 # Local-obs files (infra/prometheus, infra/grafana, infra/postgres) are kept
 # in repo as reference/fallback but no longer run in compose.
 
@@ -31,12 +31,11 @@ services:
 
   3am:
     build: ./apps/3am
-    extra_hosts:
-      - "host.docker.internal:host-gateway" # Linux Docker can't resolve this otherwise
     volumes:
       - ./trueforge:/app/trueforge:ro # agent.json: single source of truth for the spec
     environment:
-      TRUEFORGE_BASE_URL: ${TRUEFORGE_BASE_URL:-http://host.docker.internal:8790}
+      # TrueForge runs on host via npx (port 8791). Container reaches it via host.docker.internal.
+      TRUEFORGE_BASE_URL: http://host.docker.internal:8791
       TRUEFORGE_AGENT_NAME: ${TRUEFORGE_AGENT_NAME:-three-am-investigator}
       TRUEFORGE_MODEL: ${TRUEFORGE_MODEL:-}
       THREE_AM_PORT: ${THREE_AM_PORT:-3001}
@@ -50,3 +49,5 @@ services:
     depends_on:
       - blog
       - alloy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
