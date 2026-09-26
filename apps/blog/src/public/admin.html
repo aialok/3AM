@@ -127,8 +127,10 @@
   button.page.resolve { background: linear-gradient(180deg, #1c2b23, var(--panel)); border-color: #2c4a3a; }
   button.page.resolve .name { color: #9df0cf; }
 
-  .inc { display: flex; gap: 10px; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(37,48,68,0.5); }
+  .inc { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border-bottom: 1px solid rgba(37,48,68,0.5); cursor: pointer; border-radius: 6px; }
+  .inc:hover { background: var(--panel-2); }
   .inc:last-child { border-bottom: none; }
+  .inc.sel { background: #16233a; outline: 1px solid var(--accent); }
   .inc .id { font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
   .inc .al { color: var(--muted); flex-shrink: 0; }
   .inc .st { margin-left: auto; font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 999px; letter-spacing: 0.04em; flex-shrink: 0; }
@@ -136,6 +138,44 @@
   .st.investigating { background: #12233a; color: var(--accent); }
   .st.done { background: #12241d; color: var(--good); }
   .st.error, .st.resolved { background: #2a1620; color: #ffb4b4; }
+
+  /* incident detail drawer */
+  .drawer { position: fixed; inset: 0; background: rgba(4,7,12,0.72); display: none; z-index: 50; }
+  .drawer.open { display: flex; justify-content: center; align-items: flex-start; padding: 34px 20px; overflow-y: auto; }
+  .sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; width: 100%; max-width: 1000px; }
+  .sheet header { display: flex; align-items: center; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--line); flex-wrap: wrap; margin: 0; }
+  .sheet .close { margin-left: auto; background: var(--panel-2); border: 1px solid var(--line); color: var(--text); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 15px; }
+  .tabs { display: flex; gap: 4px; padding: 12px 22px 0; border-bottom: 1px solid var(--line); }
+  .tab { background: none; border: none; color: var(--muted); padding: 9px 14px; cursor: pointer; font-family: inherit; font-size: 13.5px; font-weight: 600; border-bottom: 2px solid transparent; }
+  .tab.on { color: var(--text); border-bottom-color: var(--accent); }
+  .tabbody { padding: 20px 22px 26px; }
+
+  .sum { background: var(--panel-2); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 13px 16px; margin-bottom: 18px; line-height: 1.6; }
+  .kv { display: grid; grid-template-columns: 132px 1fr; gap: 7px 14px; font-size: 13.5px; margin-bottom: 18px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; }
+  .sect { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); font-weight: 700; margin: 20px 0 9px; }
+  .ev { background: var(--panel-2); border-radius: 8px; padding: 10px 13px; margin-bottom: 7px; font-size: 13px; line-height: 1.55; }
+  .ev .src { color: var(--accent); font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; display: block; margin-bottom: 3px; }
+  .hyp { color: var(--warn); font-size: 13px; margin-bottom: 5px; padding-left: 16px; }
+  .conf { display: flex; align-items: center; gap: 11px; margin: 16px 0; }
+  .conf .bar { flex: 1; height: 7px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+  .conf .fill { height: 100%; background: var(--good); }
+  .conf .fill.mid { background: var(--warn); }
+  .conf .fill.low { background: var(--bad); }
+  .conf .n { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+  .step { display: flex; gap: 12px; padding: 11px 0; border-bottom: 1px solid rgba(37,48,68,0.5); }
+  .step:last-child { border-bottom: none; }
+  .badge { font-size: 10px; font-weight: 800; letter-spacing: 0.05em; padding: 3px 8px; border-radius: 5px; height: fit-content; flex-shrink: 0; text-transform: uppercase; }
+  .badge.grafana { background: #12233a; color: #7db4ff; }
+  .badge.sentry { background: #241a35; color: #c39cf5; }
+  .badge.other { background: var(--panel-2); color: var(--muted); }
+  .step .body { flex: 1; min-width: 0; }
+  .step .tool { font-weight: 700; font-size: 13.5px; }
+  .step .q { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; color: #9df0cf; background: #101a15; padding: 7px 10px; border-radius: 6px; margin-top: 5px; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+  .step .res { font-size: 11.5px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+  .step .tm { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 
   .links { display: flex; gap: 10px; flex-wrap: wrap; }
   .links a {
@@ -203,7 +243,7 @@
   </section>
 
   <section>
-    <h2>Incidents</h2>
+    <h2>Incidents — click one to see how 3AM investigated it</h2>
     <div class="log" id="incidents"><div class="empty">No incidents yet — fire an alert above.</div></div>
   </section>
 
@@ -225,6 +265,23 @@
   </section>
 
   <footer>Every click here is a real HTTP request. Metrics flow to Grafana Cloud via Alloy; errors and traces flow to Sentry.</footer>
+</div>
+
+<div class="drawer" id="drawer">
+  <div class="sheet">
+    <header>
+      <strong id="dTitle">Incident</strong>
+      <span class="st open" id="dStatus">—</span>
+      <span class="sub" id="dSub"></span>
+      <button class="close" id="dClose" title="Close">✕</button>
+    </header>
+    <div class="tabs">
+      <button class="tab on" data-tab="rca">RCA</button>
+      <button class="tab" data-tab="trace">Investigation</button>
+      <button class="tab" data-tab="timeline">Timeline</button>
+    </div>
+    <div class="tabbody" id="dBody">loading…</div>
+  </div>
 </div>
 
 <script>
@@ -305,7 +362,7 @@ function renderIncidents(rows) {
   el.innerHTML = rows
     .slice(0, 8)
     .map(
-      (i) => `<div class="inc">
+      (i) => `<div class="inc" data-inc="${i.id}">
         <span class="id">${i.id}</span>
         <span class="al">${i.alertname}</span>
         <span class="al">· ${(i.alert_count ?? 1)} alert(s)</span>
@@ -313,6 +370,122 @@ function renderIncidents(rows) {
       </div>`
     )
     .join('');
+}
+
+// --- incident detail -------------------------------------------------------
+
+const esc = (s) =>
+  String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString('en-GB', { hour12: false }) : '');
+
+let detail = { incident: null, trace: null, tab: 'rca' };
+
+function confClass(c) {
+  return c >= 0.7 ? '' : c >= 0.4 ? 'mid' : 'low';
+}
+
+function rcaHtml(i) {
+  const r = i.rca;
+  if (!r) {
+    return `<div class="ev">${i.status === 'error'
+      ? `Investigation failed: ${esc(i.error ?? 'unknown error')}`
+      : 'Investigation still running — the RCA appears here when the agent finishes.'}</div>`;
+  }
+  const conf = Number(r.confidence ?? 0);
+  return `
+    <div class="sum">${esc(r.summary)}</div>
+    <div class="conf">
+      <span class="n">${(conf * 100).toFixed(0)}%</span>
+      <span class="bar"><span class="fill ${confClass(conf)}" style="width:${Math.round(conf * 100)}%"></span></span>
+      <span class="al" style="color:var(--muted);font-size:12px">confidence</span>
+    </div>
+    <dl class="kv">
+      <dt>Started</dt><dd>${esc(r.started_at)}</dd>
+      <dt>Service</dt><dd>${esc(r.affected_service)}</dd>
+      <dt>Customer impact</dt><dd>${esc(r.customer_impact)}</dd>
+      <dt>Root cause</dt><dd>${esc(r.root_cause)}</dd>
+      <dt>Mitigate now</dt><dd>${esc(r.mitigation_now)}</dd>
+      <dt>Follow-up</dt><dd>${esc(r.follow_up)}</dd>
+    </dl>
+    <div class="sect">Evidence — observed facts</div>
+    ${(r.evidence ?? []).map((e) => `<div class="ev"><span class="src">${esc(e.source)}</span>${esc(e.fact)}</div>`).join('') || '<div class="ev">No evidence recorded.</div>'}
+    <div class="sect">Hypotheses — not confirmed</div>
+    ${(r.hypotheses ?? []).map((h) => `<div class="hyp">• ${esc(h)}</div>`).join('') || '<div class="ev">None.</div>'}
+    <div class="sect">Timeline</div>
+    ${(r.timeline ?? []).map((t) => `<div class="ev"><span class="src">${esc(clock(t.at))}</span>${esc(t.event)}</div>`).join('') || ''}
+  `;
+}
+
+function traceHtml() {
+  const t = detail.trace;
+  if (!t) return '<div class="ev">Loading investigation…</div>';
+  if (t.error) return `<div class="ev">Could not load trace: ${esc(t.error)}</div>`;
+  if (!t.steps?.length) {
+    return `<div class="ev">${t.discovery
+      ? `The agent made ${t.discovery} tool-discovery call(s) but no data queries yet.`
+      : 'No investigation steps recorded yet.'}</div>`;
+  }
+  const head = `<div class="sect">${t.totals.grafana} Grafana queries · ${t.totals.sentry} Sentry queries · ${t.discovery} discovery calls</div>`;
+  return head + t.steps.map((s) => `
+    <div class="step">
+      <span class="badge ${s.server ?? 'other'}">${esc(s.server ?? 'harness')}</span>
+      <div class="body">
+        <div class="tool">${esc(s.tool)}</div>
+        ${s.detail ? `<div class="q">${esc(s.detail)}</div>` : ''}
+        ${s.resultPreview ? `<div class="res">→ ${esc(s.resultPreview)}</div>` : ''}
+      </div>
+      <span class="tm">${clock(s.at)}</span>
+    </div>`).join('');
+}
+
+function timelineHtml(i) {
+  const rows = [
+    ...(i.timeline ?? []).map((t) => ({ at: t.at, text: t.event, kind: 'pipeline' })),
+    ...(i.rca?.timeline ?? []).map((t) => ({ at: t.at, text: t.event, kind: 'agent' })),
+  ].sort((a, b) => String(a.at).localeCompare(String(b.at)));
+  if (!rows.length) return '<div class="ev">No timeline yet.</div>';
+  return rows.map((r) => `<div class="step">
+      <span class="badge ${r.kind === 'agent' ? 'sentry' : 'other'}">${r.kind}</span>
+      <div class="body"><div>${esc(r.text)}</div></div>
+      <span class="tm">${clock(r.at)}</span>
+    </div>`).join('');
+}
+
+function renderDrawer() {
+  const i = detail.incident;
+  if (!i) return;
+  document.getElementById('dTitle').textContent = `${i.id} — ${i.alertname}`;
+  const st = document.getElementById('dStatus');
+  st.textContent = i.status;
+  st.className = `st ${i.status}`;
+  document.getElementById('dSub').textContent =
+    `${(i.alert_count ?? 1)} alert(s) · opened ${clock(i.created_at)}`;
+  document.getElementById('dBody').innerHTML =
+    detail.tab === 'rca' ? rcaHtml(i)
+    : detail.tab === 'trace' ? traceHtml()
+    : timelineHtml(i);
+}
+
+async function openIncident(id) {
+  detail = { incident: null, trace: null, tab: 'rca' };
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('dBody').textContent = 'loading…';
+  try {
+    const r = await fetch(`/admin/incidents/${id}`);
+    detail.incident = await r.json();
+  } catch (e) {
+    document.getElementById('dBody').textContent = `Could not load incident: ${e.message}`;
+    return;
+  }
+  renderDrawer();
+  // Trace is fetched alongside so the tab is instant when opened.
+  try {
+    const r = await fetch(`/admin/incidents/${id}/trace`);
+    detail.trace = await r.json();
+  } catch {
+    detail.trace = { error: 'trace unavailable' };
+  }
+  if (detail.tab === 'trace') renderDrawer();
 }
 
 async function fireAlert(alertname, status = 'firing') {
@@ -476,6 +649,15 @@ document.addEventListener('click', (e) => {
   }
   const q = e.target.closest('[data-rps]');
   if (q) { setRps(Number(q.dataset.rps)); return; }
+  const inc = e.target.closest('[data-inc]');
+  if (inc) { openIncident(inc.dataset.inc); return; }
+  const tab = e.target.closest('[data-tab]');
+  if (tab) {
+    detail.tab = tab.dataset.tab;
+    document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('on', t === tab));
+    renderDrawer();
+    return;
+  }
   const a = e.target.closest('[data-alert]');
   if (a) { fireAlert(a.dataset.alert, 'firing'); return; }
   if (e.target.closest('#resolve')) { fireAlert(lastAlertName, 'resolved'); }
@@ -491,6 +673,15 @@ document.getElementById('rpsRange').addEventListener('input', (e) => {
 document.getElementById('stop').addEventListener('click', () =>
   post('/chaos/stop', 'Stopped all chaos — service recovering')
 );
+document.getElementById('dClose').addEventListener('click', () =>
+  document.getElementById('drawer').classList.remove('open')
+);
+document.getElementById('drawer').addEventListener('click', (e) => {
+  if (e.target.id === 'drawer') e.target.classList.remove('open');
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') document.getElementById('drawer').classList.remove('open');
+});
 
 refresh();
 refreshIncidents();

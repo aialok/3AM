@@ -24,6 +24,10 @@ Manual correlation → Hypothesize → Test → Fix
 
 ![3AM Architecture](https://github.com/user-attachments/assets/7f9ca603-4342-4fdb-bb35-7fdce03da1f1)
 
+## Loom Videos
+
+https://www.loom.com/share/1892a6c703304153818e5b1354d4d438
+
 ### What Happens When Latency Spikes
 
 **1. Application emits signals**  
@@ -260,3 +264,7 @@ cd apps/3am && pnpm dev
 ## License
 
 MIT — Hackathon project, use freely.
+
+Thank you TrueForge Team for the harness really cool! 
+
+This is going to be actual on call agents at fampay - which will handling thousands of alert everyday : )

@@ -135,3 +135,21 @@ adminRouter.get('/incidents', async (_req, res, next) => {
     next(err);
   }
 });
+
+adminRouter.get('/incidents/:id', async (req, res, next) => {
+  try {
+    const r = await fetch(`${THREE_AM_URL}/incidents/${encodeURIComponent(req.params.id)}`);
+    res.status(r.status).json(await r.json());
+  } catch (err) {
+    next(err);
+  }
+});
+
+adminRouter.get('/incidents/:id/trace', async (req, res, next) => {
+  try {
+    const r = await fetch(`${THREE_AM_URL}/incidents/${encodeURIComponent(req.params.id)}/trace`);
+    res.status(r.status).json(await r.json());
+  } catch (err) {
+    next(err);
+  }
+});

@@ -2,6 +2,7 @@ import './env.js';
 import express from 'express';
 import { config, assertConfig } from './config.js';
 import { ingestAlert, getIncident, listIncidents } from './incidents.js';
+import { buildTrace } from './trace.js';
 import { initIncidentsSchema } from './incidents-db.js';
 import { investigate } from './investigate.js';
 
@@ -39,6 +40,19 @@ app.get('/incidents/:id', (req, res, next) => {
     .then((incident) => {
       if (!incident) return res.status(404).json({ error: 'not found' });
       res.json(incident);
+    })
+    .catch(next);
+});
+
+// How the agent actually investigated: the MCP calls it made, the queries it
+// ran, and what came back. Lets a human audit the reasoning.
+app.get('/incidents/:id/trace', (req, res, next) => {
+  getIncident(req.params.id)
+    .then((incident) => {
+      if (!incident) return res.status(404).json({ error: 'not found' });
+      return buildTrace(incident.session_id)
+        .then((trace) => res.json({ incidentId: incident.id, status: incident.status, ...trace }))
+        .catch((err) => res.json({ incidentId: incident.id, steps: [], error: err.message }));
     })
     .catch(next);
 });
