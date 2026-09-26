@@ -1,0 +1,14 @@
+{
+  "name": "3am",
+  "version": "0.1.0",
+  "private": true,
+  "description": "3AM — autonomous incident-response agent on TrueForge. When production breaks at 3AM, 3AM is already awake.",
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev:blog": "pnpm --filter blog dev",
+    "dev:3am": "pnpm --filter 3am dev"
+  },
+  "engines": {
+    "node": ">=22.14"
+  }
+}

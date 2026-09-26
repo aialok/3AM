@@ -1,0 +1,98 @@
+{
+  "name": "three-am-investigator",
+  "description": "Autonomous incident-response investigator for the blog demo app. Correlates Grafana metrics with Sentry errors and produces a structured RCA.",
+  "manifest": {
+    "model": {
+      "name": "MODEL_FROM_ENV_SEE_README",
+      "params": {
+        "temperature": 0.2,
+        "max_tokens": 4096
+      }
+    },
+    "instructions": "You are 3AM, an autonomous incident-response investigator for a demo blog app (Express + Postgres).\n\nYou receive an incident trigger with: alert name, service, start time, and Grafana/Sentry links.\n\nProcedure:\n1. Query Grafana MCP tools for the incident window: latency (p50/p95), error rate, traffic (RPS), DB pool saturation. Compare against the 1h baseline before the incident.\n2. Query Sentry MCP tools for the same window: error spikes, affected endpoints, top exception types, stack traces, frequency, first-seen timestamps.\n3. Correlate: do Grafana and Sentry agree on start time, affected endpoints, and probable layer (db / dependency / traffic / app)?\n4. Decide root cause from evidence. Distinguish OBSERVED FACTS (metric values, timestamps, stack frames) from HYPOTHESES.\n5. Score confidence 0-1 based on agreement across both systems.\n6. Recommend one immediate mitigation (e.g. stop chaos, scale pool, rollback) and one follow-up.\n\nRules:\n- Use read-only investigation tools only. Never restart, scale, or mutate anything.\n- Never ask clarifying questions; work with what you have (ask_user_questions is disabled).\n- If evidence is missing from one system, say so explicitly and lower confidence.\n- Output MUST be valid JSON matching the response_format schema. No markdown, no extra text.",
+    "mcp_servers": [
+      {
+        "name": "grafana",
+        "enable_tools": ["@read-only"],
+        "require_approval_for_tools": ["@destructive"],
+        "preload": false
+      },
+      {
+        "name": "sentry",
+        "enable_tools": ["@read-only"],
+        "require_approval_for_tools": ["@destructive"],
+        "preload": false
+      }
+    ],
+    "skills": [],
+    "config": {
+      "sandbox": { "enabled": false },
+      "generative_ui": { "enabled": true },
+      "ask_user_questions": { "enabled": false },
+      "dynamic_sub_agents": { "enabled": true },
+      "context_management": {
+        "compaction": { "enabled": true },
+        "large_tool_response": { "enabled": true }
+      },
+      "iteration_limit": 50
+    },
+    "response_format": {
+      "type": "json_schema",
+      "json_schema": {
+        "name": "rca",
+        "schema": {
+          "type": "object",
+          "required": [
+            "summary",
+            "started_at",
+            "affected_service",
+            "customer_impact",
+            "timeline",
+            "root_cause",
+            "evidence",
+            "hypotheses",
+            "confidence",
+            "mitigation_now",
+            "follow_up"
+          ],
+          "properties": {
+            "summary": { "type": "string" },
+            "started_at": { "type": "string" },
+            "affected_service": { "type": "string" },
+            "customer_impact": { "type": "string" },
+            "timeline": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["at", "event"],
+                "properties": {
+                  "at": { "type": "string" },
+                  "event": { "type": "string" }
+                }
+              }
+            },
+            "root_cause": { "type": "string" },
+            "evidence": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["source", "fact"],
+                "properties": {
+                  "source": { "type": "string" },
+                  "fact": { "type": "string" }
+                }
+              }
+            },
+            "hypotheses": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "confidence": { "type": "number" },
+            "mitigation_now": { "type": "string" },
+            "follow_up": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

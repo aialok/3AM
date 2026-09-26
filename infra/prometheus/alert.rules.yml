@@ -1,0 +1,42 @@
+# Prometheus-evaluated rules (visible in Prometheus UI).
+# Grafana-managed copies of these (same PromQL) own the webhook → 3AM path.
+# See infra/grafana/provisioning/alerting/blog-rules.yml.
+groups:
+  - name: blog
+    interval: 30s
+    rules:
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[2m]))) > 0.8
+        for: 1m
+        labels:
+          severity: page
+          service: blog
+        annotations:
+          summary: 'Blog p95 latency above 0.8s'
+
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[2m])) / sum(rate(http_requests_total[2m])) > 0.05
+        for: 1m
+        labels:
+          severity: page
+          service: blog
+        annotations:
+          summary: 'Blog 5xx rate above 5%'
+
+      - alert: DbPoolExhausted
+        expr: db_pool_waiting > 0
+        for: 1m
+        labels:
+          severity: page
+          service: blog
+        annotations:
+          summary: 'Requests waiting for a Postgres connection'
+
+      - alert: TrafficSpike
+        expr: sum(rate(http_requests_total[2m])) > 20
+        for: 1m
+        labels:
+          severity: warn
+          service: blog
+        annotations:
+          summary: 'Blog traffic above 20 RPS'

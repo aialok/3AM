@@ -1,0 +1,33 @@
+# MCP connector definitions for the TrueForge server.
+# Register under Settings → Connectors (or via MCP API).
+# Credentials live HERE in the connector, never in agent.json.
+# All secrets/URLs come from environment — nothing hardcoded.
+#
+# Required env (see .env.example):
+#   GRAFANA_MCP_URL, GRAFANA_MCP_TOKEN
+#   SENTRY_MCP_URL, SENTRY_MCP_TOKEN
+
+[
+  {
+    "name": "grafana",
+    "url": "${GRAFANA_MCP_URL}",
+    "auth": {
+      "type": "header",
+      "headers": {
+        "Authorization": "Bearer ${GRAFANA_MCP_TOKEN}"
+      }
+    },
+    "note": "Investigation tools only. Agent enables @read-only."
+  },
+  {
+    "name": "sentry",
+    "url": "${SENTRY_MCP_URL}",
+    "auth": {
+      "type": "header",
+      "headers": {
+        "Authorization": "Bearer ${SENTRY_MCP_TOKEN}"
+      }
+    },
+    "note": "Exceptions, spikes, stack traces. Agent enables @read-only."
+  }
+]

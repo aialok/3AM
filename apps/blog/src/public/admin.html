@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Blog Admin — traffic + incident simulator</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
+  .row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 0.5rem 0 1.5rem; }
+  button { padding: 0.5rem 1rem; cursor: pointer; }
+  button.danger { background: #c0392b; color: #fff; border: none; }
+  button.on { outline: 3px solid #c0392b; }
+  pre { background: #f4f4f4; padding: 1rem; overflow: auto; }
+  #active { font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>Blog Admin</h1>
+<p>Prod-traffic + incident simulator for the 3AM hackathon demo.</p>
+<p>Active: <span id="active">none</span></p>
+
+<h2>Traffic</h2>
+<div class="row">
+  <button data-chaos="traffic-spike">Start Spike</button>
+</div>
+
+<h2>Incidents</h2>
+<div class="row">
+  <button data-chaos="db-lock">DB Lock</button>
+  <button data-chaos="latency">Latency</button>
+  <button data-chaos="retry-storm">Retry Storm</button>
+  <button data-chaos="dependency-fail">Dependency Fail</button>
+  <button data-chaos="error-rate">Error Rate</button>
+  <button id="chaos-stop" class="danger">Stop All</button>
+</div>
+
+<h2>Status <small>(live)</small></h2>
+<pre id="status">loading…</pre>
+<p><a href="http://localhost:3002" target="_blank" rel="noopener">Grafana dashboard</a></p>
+
+<script>
+async function post(path) {
+  const r = await fetch(path, { method: 'POST' });
+  document.getElementById('status').textContent = JSON.stringify(await r.json(), null, 2);
+  refresh();
+}
+document.querySelectorAll('[data-chaos]').forEach((b) =>
+  b.addEventListener('click', () => post('/chaos/' + b.dataset.chaos))
+);
+document.getElementById('chaos-stop').addEventListener('click', () => post('/chaos/stop'));
+
+async function refresh() {
+  try {
+    const r = await fetch('/admin/status');
+    const data = await r.json();
+    document.getElementById('active').textContent = data.chaos.active.join(', ') || 'none';
+    document.querySelectorAll('[data-chaos]').forEach((b) =>
+      b.classList.toggle('on', data.chaos.active.includes(b.dataset.chaos))
+    );
+    document.getElementById('status').textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    document.getElementById('status').textContent = 'unreachable: ' + e;
+  }
+}
+setInterval(refresh, 2000);
+refresh();
+</script>
+</body>
+</html>

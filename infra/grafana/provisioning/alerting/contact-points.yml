@@ -1,0 +1,16 @@
+# Alerting: webhook contact point → 3AM, routed by alertname.
+# NOTE: URL assumes default THREE_AM_PORT=3001. If changed, update below.
+apiVersion: 1
+contactPoints:
+  - orgId: 1
+    name: 3am-webhook
+    receivers:
+      - uid: three-am
+        type: webhook
+        settings:
+          url: http://3am:3001/webhook/grafana
+          httpMethod: POST
+policies:
+  - orgId: 1
+    receiver: 3am-webhook
+    group_by: ['alertname']

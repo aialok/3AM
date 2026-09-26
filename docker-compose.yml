@@ -1,0 +1,72 @@
+# 3AM local demo topology.
+# All secrets/URLs come from environment (.env). Nothing hardcoded.
+# TrueForge server runs separately via `npx @truefoundry/trueforge` (port 8790).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-blog}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blog}
+      POSTGRES_DB: ${POSTGRES_DB:-blog}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "5432:5432"
+
+  blog:
+    build: ./apps/blog
+    environment:
+      # Compose-network URL built from env parts (host `postgres` only resolves here).
+      DATABASE_URL: postgres://${POSTGRES_USER:-blog}:${POSTGRES_PASSWORD:-blog}@postgres:5432/${POSTGRES_DB:-blog}
+      BLOG_PORT: ${BLOG_PORT:-3000}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+    ports:
+      - "${BLOG_PORT:-3000}:${BLOG_PORT:-3000}"
+    depends_on:
+      - postgres
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infra/prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - blog
+
+  grafana:
+    image: grafana/grafana:11.5.2
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3002:3000"
+    depends_on:
+      - prometheus
+
+  3am:
+    build: ./apps/3am
+    environment:
+      TRUEFORGE_BASE_URL: ${TRUEFORGE_BASE_URL:-http://host.docker.internal:8790}
+      TRUEFORGE_AGENT_NAME: ${TRUEFORGE_AGENT_NAME:-three-am-investigator}
+      THREE_AM_PORT: ${THREE_AM_PORT:-3001}
+      GRAFANA_BASE_URL: ${GRAFANA_BASE_URL:-http://grafana:3000}
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_CHANNEL_ID: ${SLACK_CHANNEL_ID:-}
+      NOTION_TOKEN: ${NOTION_TOKEN:-}
+      NOTION_DATABASE_ID: ${NOTION_DATABASE_ID:-}
+    ports:
+      - "${THREE_AM_PORT:-3001}:${THREE_AM_PORT:-3001}"
+    depends_on:
+      - blog
+      - grafana
+
+volumes:
+  pgdata:
