@@ -1,62 +1,25 @@
-# 3AM demo topology: app runs locally, observability/notifications on cloud.
+# 3AM demo topology: app runs locally, data + observability + notifications on cloud.
 # All secrets/URLs come from environment (.env). Nothing hardcoded.
 # TrueForge server runs separately via `npx @truefoundry/trueforge` (port 8790).
-# Local Prometheus/Grafana are kept as a fallback behind --profile local-obs.
+# Local-obs files (infra/prometheus, infra/grafana, infra/postgres) are kept
+# in repo as reference/fallback but no longer run in compose.
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER:-blog}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blog}
-      POSTGRES_DB: ${POSTGRES_DB:-blog}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    ports:
-      - "5432:5432"
-
   blog:
     build: ./apps/blog
     environment:
-      # Compose-network URL built from env parts (host `postgres` only resolves here).
-      DATABASE_URL: postgres://${POSTGRES_USER:-blog}:${POSTGRES_PASSWORD:-blog}@postgres:5432/${POSTGRES_DB:-blog}
+      # Neon (from env). No local postgres to operate.
+      DATABASE_URL: ${DATABASE_URL}
       BLOG_PORT: ${BLOG_PORT:-3000}
       SENTRY_DSN: ${SENTRY_DSN:-}
     ports:
       - "${BLOG_PORT:-3000}:${BLOG_PORT:-3000}"
-    depends_on:
-      - postgres
-
-  prometheus:
-    profiles: ["local-obs"]
-    image: prom/prometheus:v3.1.0
-    volumes:
-      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./infra/prometheus/alert.rules.yml:/etc/prometheus/alert.rules.yml:ro
-    ports:
-      - "9090:9090"
-    depends_on:
-      - blog
-
-  grafana:
-    profiles: ["local-obs"]
-    image: grafana/grafana:11.5.2
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      PROMETHEUS_URL: ${PROMETHEUS_URL:-http://prometheus:9090}
-    volumes:
-      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./infra/grafana/dashboards:/var/lib/grafana/dashboards:ro
-    ports:
-      - "3002:3000"
-    depends_on:
-      - prometheus
 
   alloy:
     image: grafana/alloy:v1.7.4
-    command: ["run", "/etc/alloy/config.alloy"]
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "/etc/alloy/config.alloy"]
+    ports:
+      - "12345:12345" # Alloy debug UI (pipeline + target health)
     environment:
       GCLOUD_HOSTED_METRICS_URL: ${GCLOUD_HOSTED_METRICS_URL}
       GCLOUD_HOSTED_METRICS_ID: ${GCLOUD_HOSTED_METRICS_ID}
@@ -68,9 +31,14 @@ services:
 
   3am:
     build: ./apps/3am
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Linux Docker can't resolve this otherwise
+    volumes:
+      - ./trueforge:/app/trueforge:ro # agent.json: single source of truth for the spec
     environment:
       TRUEFORGE_BASE_URL: ${TRUEFORGE_BASE_URL:-http://host.docker.internal:8790}
       TRUEFORGE_AGENT_NAME: ${TRUEFORGE_AGENT_NAME:-three-am-investigator}
+      TRUEFORGE_MODEL: ${TRUEFORGE_MODEL:-}
       THREE_AM_PORT: ${THREE_AM_PORT:-3001}
       GRAFANA_BASE_URL: ${GRAFANA_BASE_URL:-http://grafana:3000}
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
@@ -82,6 +50,3 @@ services:
     depends_on:
       - blog
       - alloy
-
-volumes:
-  pgdata:
