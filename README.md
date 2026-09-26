@@ -1,8 +1,8 @@
-# 3AM — Autonomous Incident Response
+# 3AM Autonomous Incident Response
 
 > **When production breaks at 3AM, 3AM is already awake.**
 
-3AM is an autonomous incident-response agent that automatically investigates production incidents before engineers start debugging. Built on [TrueForge](https://trueforge.dev) (open-source agent harness), it correlates metrics from **Grafana** and errors from **Sentry** to generate a Root Cause Analysis (RCA) — then posts it to **Slack** and **Notion**.
+3AM is an autonomous incident-response agent that automatically investigates production incidents before engineers start debugging. Built on [TrueForge](https://trueforge.dev) (open-source agent harness), it correlates metrics from **Grafana** and errors from **Sentry** to generate a Root Cause Analysis (RCA) then posts it to **Slack** and **Notion**.
 
 ## Why This Exists: A 3 AM Page at Fampay
 
@@ -17,6 +17,15 @@ That work is mechanical, repetitive, and happens at the worst possible hour. It'
 3AM is what I'd want to receive at 3 AM instead of a raw alert: a written root-cause analysis, with cited evidence, a confidence score, and a recommended next action, already waiting.
 
 **The premise:** an incident is a correlation problem, and correlation is what language models are genuinely good at. The metrics platform knows p99 latency went from 120 ms to 4.9 s and that the connection pool saturated, but not that a specific migration took a table lock. The error tracker knows a deadlock exception appeared at one line and one timestamp, but not whether it accounts for the customer impact. The answer only exists where the two overlap — and finding that overlap by hand at 3 AM is slow, repetitive, and exactly the kind of judgment work that shouldn't require a senior engineer.
+
+## How It Works: The Complete Flow
+
+![3AM Architecture](https://github.com/user-attachments/assets/7f9ca603-4342-4fdb-bb35-7fdce03da1f1)
+
+## Loom Videos
+
+https://www.loom.com/share/1892a6c703304153818e5b1354d4d438
+
 
 ## How It Behaves in Production
 
@@ -54,13 +63,6 @@ The investigation is genuinely open-ended. The agent decides which queries to ru
 
 A fixed runbook would have to know in advance which queries to run, in what order, and how to interpret every result — and would have no idea what to do when a query fails, an unfamiliar error type appears, or the evidence genuinely does not support a conclusion. That last case is precisely where deterministic automation is worst and an agent is most useful.
 
-## How It Works: The Complete Flow
-
-![3AM Architecture](https://github.com/user-attachments/assets/7f9ca603-4342-4fdb-bb35-7fdce03da1f1)
-
-## Loom Videos
-
-https://www.loom.com/share/1892a6c703304153818e5b1354d4d438
 
 ### What Happens When Latency Spikes
 
@@ -96,9 +98,9 @@ Slack gets a 3-line summary with a link. Notion gets the full investigation with
 Blog API at 100% error rate due to database connection pool exhaustion.
 
 ## Timeline
-- 03:12:00 — Alert fired: DbPoolExhausted
-- 03:12:05 — INC-0001 created, TrueForge session started
-- 03:12:30 — RCA complete
+**03:12:00** — Alert fired: DbPoolExhausted
+**03:12:05** — INC-0001 created, TrueForge session started
+**03:12:30** — RCA complete
 
 ## Affected Service
 `blog` (Express API)
@@ -137,18 +139,19 @@ Blog API at 100% error rate due to database connection pool exhaustion.
 
 ### Key Design Principles
 
-- **TrueForge owns the agent** — sessions, MCP tools, model execution, context, lifecycle
-- **3AM owns the incident workflow** — webhook, dedupe, incident lifecycle, notifications
-- **One TrueForge session per incident** — clean mapping `INC-xxxx` ↔ `session.id`
-- **MCP servers on TrueForge** — Grafana MCP for metrics, Sentry MCP for errors
-- **Cloud-first observability** — Grafana Cloud + Sentry Cloud (local scraper only)
+**TrueForge owns the agent**, handling sessions, MCP tools, model execution, context, and lifecycle. **3AM owns the incident workflow** around it: webhook intake, deduplication, incident lifecycle, and notifications. That split is the whole architecture, and it means 3AM never implements an agent runtime of its own.
+
+**One TrueForge session per incident**, giving a clean mapping from `INC-xxxx` to `session.id`, so every investigation has an isolated context and an inspectable transcript.
+
+**MCP servers are attached on TrueForge**, with Grafana MCP for metrics and Sentry MCP for errors, configured as connectors so credentials never live in the agent definition.
+
+**Cloud-first observability**, using Grafana Cloud and Sentry Cloud. A local collector scrapes and remote-writes, but no state is stored locally.
 
 ## Quick Start
 
 ### Prerequisites
-- Docker + Docker Compose
-- `.env` file with credentials
-- OpenAI API key (configured in TrueForge UI)
+
+You'll need Docker with Docker Compose, a `.env` file populated with your credentials, and an OpenAI API key configured through the TrueForge UI.
 
 ### One-Command Demo
 
@@ -161,10 +164,13 @@ docker compose up --build -d
 ```
 
 **Open these for the demo:**
-- Admin panel: http://localhost:3000/admin
-- TrueForge UI: http://localhost:8791
-- 3AM health: http://localhost:3001/healthz
-- Grafana dashboard: your Grafana Cloud URL
+
+| What | Where |
+|------|-------|
+| Admin panel (start here) | http://localhost:3000/admin |
+| TrueForge UI (watch the session) | http://localhost:8791 |
+| 3AM health | http://localhost:3001/healthz |
+| Grafana dashboard | your Grafana Cloud URL |
 
 ### 60-Second Demo Flow
 
@@ -290,10 +296,7 @@ cd apps/3am && pnpm dev
 
 ## Credits
 
-- **TrueForge** — Agent harness ([trueforge.dev](https://trueforge.dev))
-- **Grafana** — Metrics & alerting
-- **Sentry** — Error tracking
-- **OpenAI** — LLM reasoning
+Built on **[TrueForge](https://trueforge.dev)** as the agent harness, with **[Grafana](https://grafana.com)** for metrics and alerting, **[Sentry](https://sentry.io)** for error tracking, and **[OpenAI](https://openai.com)** for model reasoning.
 
 ## License
 
